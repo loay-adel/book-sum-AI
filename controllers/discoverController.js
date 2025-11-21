@@ -1,3 +1,4 @@
+import "dotenv/config"; // تحميل متغيرات البيئة
 import axios from "axios";
 
 export const discoverBooks = async (req, res) => {
@@ -10,9 +11,16 @@ export const discoverBooks = async (req, res) => {
       });
     }
 
+    // التأكد من وجود المفتاح لتجنب الأخطاء
+    const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
+    if (!apiKey) {
+        console.warn("Warning: GOOGLE_BOOKS_API_KEY is missing in .env");
+    }
+
     const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
       subject
-    )}&maxResults=40&key=${process.env.GOOGLE_BOOKS_API_KEY}`;
+    )}&maxResults=40&key=${apiKey || ""}`;
+    
     const response = await axios.get(url, { timeout: 15000 });
 
     let books = [];

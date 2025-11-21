@@ -1,7 +1,8 @@
 import pkg from "pdf-parse-fixed";
 import fs from "fs";
 import path from "path";
-import { callGeminiAPI } from "./summaryController.js";
+import { callOpenAI } from "./summaryController.js";
+
 
 const pdf = pkg;
 
@@ -31,7 +32,7 @@ export const summarizePDF = async (req, res) => {
         : `Summarize the following text in English:\n\n${extractedText}`;
 
     // Get summary from Gemini AI
-    const summary = await callGeminiAPI(prompt, lang);
+    const summary = await callOpenAI(prompt, lang);
 
     // Get recommendations based on PDF content
     const recommendationsPrompt =
@@ -66,7 +67,7 @@ export const summarizePDF = async (req, res) => {
 // Helper function to get recommendations from a prompt
 const getBookRecommendationsFromPrompt = async (prompt, lang = "en") => {
   try {
-    const response = await callGeminiAPI(prompt, lang);
+    const response = await callOpenAI(prompt, lang);
 
     // Parse the response to extract recommendations
     const lines = response.split("\n").filter((line) => line.trim());
