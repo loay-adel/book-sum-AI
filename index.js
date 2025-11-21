@@ -8,8 +8,8 @@ import summaryRoutes from "./routes/summaryRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import discoverRoutes from "./routes/discoverRoutes.js";
-import userRoutes from "./routes/userRoutes.js"; // أضف هذا
-import adminRoutes from "./routes/adminRoutes.js"; // أضف هذا
+import userRoutes from "./routes/userRoutes.js"; 
+import adminRoutes from "./routes/adminRoutes.js"; 
 
 dotenv.config();
 const app = express();
@@ -26,10 +26,10 @@ const connectDB = async () => {
 };
 
 connectDB();
-//process.env.FRONTEND_URL ||
-// Middleware الأساسي
+
+
 app.use(cors({
-  origin:  "http://localhost:3000",
+  origin:  process.env.FRONTEND_URL ||"http://localhost:3000",
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -40,8 +40,8 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/discover", discoverRoutes);
-app.use("/api/user", userRoutes); // أضف هذا
-app.use("/api/admin", adminRoutes); // أضف هذا
+app.use("/api/user", userRoutes); 
+app.use("/api/admin", adminRoutes); 
 
 // Route للصحة
 app.get("/health", (req, res) => {
