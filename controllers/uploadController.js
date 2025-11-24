@@ -50,10 +50,25 @@ export const summarizePDF = async (req, res) => {
         ? `لخص النص التالي باللغة العربية بطريقة واضحة ومنظمة:\n\n${extractedText}`
         : `Summarize the following text in English in a clear and organized manner:\n\n${extractedText}`;
 
+    // SIMPLIFIED PROMPT - No reasons, just book titles and authors
     const recommendationsPrompt =
       lang === "ar"
-        ? `اقترح 3 كتب ذات صلة بمحتوى النص التالي مع اسم المؤلف وسبب الاقتراح:\n\n${extractedText.substring(0, 1500)}`
-        : `Suggest 3 books related to the content of the following text with author names and reason for suggestion:\n\n${extractedText.substring(0, 1500)}`;
+        ? `بناءً على النص أدناه، أذكر 3 كتب مرتبطة بالموضوع مع أسماء المؤلفين فقط. بدون تفسيرات أو أسباب.
+
+النص: ${extractedText.substring(0, 1500)}
+
+الإجابة يجب أن تكون بهذا الشكل فقط:
+كتاب 1: عنوان الكتاب - اسم المؤلف
+كتاب 2: عنوان الكتاب - اسم المؤلف  
+كتاب 3: عنوان الكتاب - اسم المؤلف`
+        : `Based on the text below, list 3 related books with author names only. No explanations or reasons.
+
+Text: ${extractedText.substring(0, 1500)}
+
+Response must be in this exact format:
+Book 1: Book Title - Author Name
+Book 2: Book Title - Author Name
+Book 3: Book Title - Author Name`;
 
     // Process summary and recommendations in parallel
     const [summary, recommendations] = await Promise.all([
@@ -103,16 +118,31 @@ export const summarizePDF = async (req, res) => {
   }
 };
 
-// Improved recommendation parser
+// SIMPLIFIED recommendation parser
 const getBookRecommendationsFromPrompt = async (prompt, lang = "en") => {
   try {
     const response = await callOpenAI(prompt, lang);
 
     if (!response) return [];
 
-    const lines = response.split("\n").filter(line => 
-      line.trim() && !line.trim().startsWith("Note:") && !line.trim().startsWith("ملاحظة:")
-    );
+
+
+    const lines = response.split("\n").filter(line => {
+      const trimmed = line.trim();
+      return trimmed && 
+             // Remove any lines that contain explanatory text
+             !trimmed.toLowerCase().includes("here are") &&
+             !trimmed.toLowerCase().includes("based on") &&
+             !trimmed.toLowerCase().includes("related books") &&
+             !trimmed.toLowerCase().includes("suggest") &&
+             !trimmed.toLowerCase().includes("reason") &&
+             !trimmed.toLowerCase().includes("explanation") &&
+             !trimmed.startsWith("Note:") &&
+             !trimmed.startsWith("ملاحظة:") &&
+             !trimmed.startsWith("**") &&
+             !trimmed.includes("Unknown Author") &&
+             (trimmed.toLowerCase().includes("book") || trimmed.includes("كتاب") || /^\d+\./.test(trimmed));
+    });
     
     const recommendations = [];
     const seenTitles = new Set();
@@ -120,46 +150,49 @@ const getBookRecommendationsFromPrompt = async (prompt, lang = "en") => {
     for (const line of lines) {
       if (recommendations.length >= 3) break;
 
-      const cleanLine = line.replace(/^\d+\.\s*[-•]?\s*/, "").trim();
+      let cleanLine = line.trim();
       
-      if (!cleanLine) continue;
+      // Remove numbering patterns
+      cleanLine = cleanLine.replace(/^(Book\s*\d+:?|الكتاب\s*\d+:?|\d+\.\s*|[-•*]\s*)/i, '').trim();
+      
+      if (!cleanLine || !cleanLine.includes('-')) continue;
 
-      // Enhanced parsing for different formats
-      let title, author = "Unknown Author";
-      
-      // Try multiple parsing strategies
-      if (cleanLine.includes(" by ")) {
-        [title, author] = cleanLine.split(" by ", 2);
-      } else if (cleanLine.includes(" - ")) {
-        [title, author] = cleanLine.split(" - ", 2);
-      } else if (cleanLine.includes(":")) {
-        [title, author] = cleanLine.split(":", 2);
-      } else {
-        title = cleanLine;
+      // Simple split by the first dash that separates title and author
+      const dashIndex = cleanLine.indexOf(' - ');
+      if (dashIndex === -1) continue;
+
+      const title = cleanLine.substring(0, dashIndex).trim();
+      const author = cleanLine.substring(dashIndex + 3).trim();
+
+      // Basic validation
+      if (!title || !author || 
+          title === "Unknown Book" || 
+          author === "Unknown Author" ||
+          title.length < 2 || 
+          author.length < 2) {
+        continue;
       }
 
-      // Clean up titles and authors
-      title = title?.replace(/["«»"]/g, '').trim() || "Unknown Book";
-      author = author?.replace(/["«»"]/g, '').trim() || "Unknown Author";
-
-      // Remove trailing punctuation and reasons
-      title = title.replace(/[\.:;-]\s*$/, '');
-      author = author.replace(/[\.:;-]\s*$/, '');
+      // Clean any remaining special characters or quotes
+      const cleanTitle = title.replace(/["«»"*]/g, '').trim();
+      const cleanAuthor = author.replace(/["«»"*]/g, '').trim();
 
       // Skip duplicates
-      const titleKey = title.toLowerCase();
+      const titleKey = cleanTitle.toLowerCase();
       if (!seenTitles.has(titleKey)) {
         seenTitles.add(titleKey);
         
         recommendations.push({
-          title,
-          author,
-          thumbnail: `https://via.placeholder.com/128x192/374151/FFFFFF?text=${encodeURIComponent(title.substring(0, 10))}`
+          title: cleanTitle,
+          author: cleanAuthor,
+          thumbnail: `https://via.placeholder.com/128x192/374151/FFFFFF?text=${encodeURIComponent(cleanTitle.substring(0, 8))}`
         });
       }
     }
 
+  
     return recommendations;
+
   } catch (error) {
     console.error("Error getting recommendations:", error.message);
     return [];
