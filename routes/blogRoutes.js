@@ -6,7 +6,8 @@ import {
   likeBlog,
   addComment,
   getBlogCategories,
-  searchBlogs
+  searchBlogs,
+  saveAutoBlog 
 } from '../controllers/blogController.js';
 
 const router = express.Router();
@@ -31,5 +32,8 @@ router.get('/categories/all', getBlogCategories);
 
 // Search blogs
 router.get('/search/all', searchBlogs);
+
+// Auto-save route for automatic blog generation
+router.post('/save/auto', saveAutoBlog); 
 
 export default router;
