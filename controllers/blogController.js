@@ -82,7 +82,11 @@ export const saveAIResponseAsBlog = async (req, res) => {
 };
 
 // Get latest blog posts
+// In blogController.js, update getLatestBlogs function:
 export const getLatestBlogs = async (req, res) => {
+  console.log('=== GET LATEST BLOGS CALLED ===');
+  console.log('Query params:', req.query);
+  
   try {
     const { 
       page = 1, 
@@ -92,17 +96,22 @@ export const getLatestBlogs = async (req, res) => {
       sortBy = 'newest'
     } = req.query;
 
+    console.log('Parsed params:', { page, limit, category, language, sortBy });
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     // Build query
     const query = { isPublished: true };
+    console.log('Initial query:', query);
     
     if (category && category !== 'all') {
       query.category = category;
+      console.log('Added category filter:', category);
     }
     
     if (language && language !== 'all') {
       query.language = language;
+      console.log('Added language filter:', language);
     }
 
     // Build sort options
@@ -122,8 +131,13 @@ export const getLatestBlogs = async (req, res) => {
         sortOptions.createdAt = -1;
     }
 
+    console.log('Final query:', query);
+    console.log('Sort options:', sortOptions);
+    console.log('Skip:', skip, 'Limit:', parseInt(limit));
+
     // Get total count for pagination
     const total = await Blog.countDocuments(query);
+    console.log('Total documents found:', total);
 
     // Get blogs with pagination
     const blogs = await Blog.find(query)
@@ -132,6 +146,8 @@ export const getLatestBlogs = async (req, res) => {
       .limit(parseInt(limit))
       .select('-__v -updatedAt')
       .lean();
+
+    console.log('Blogs found:', blogs.length);
 
     // Format response
     const formattedBlogs = blogs.map(blog => ({
@@ -152,6 +168,8 @@ export const getLatestBlogs = async (req, res) => {
       featured: blog.featured
     }));
 
+    console.log('Sending response with', formattedBlogs.length, 'blogs');
+
     res.json({
       blogs: formattedBlogs,
       pagination: {
@@ -163,10 +181,15 @@ export const getLatestBlogs = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching blogs:', error);
+    console.error('=== ERROR IN GET LATEST BLOGS ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error full:', error);
+    
     res.status(500).json({
       message: 'Error fetching blog posts',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
