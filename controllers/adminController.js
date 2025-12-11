@@ -1,6 +1,8 @@
 // controllers/adminController.js
 import AdminStats from '../models/AdminStats.js';
 import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
+import Admin from '../models/Admin.js';
 
 export const getAdminStats = async (req, res) => {
   try {
@@ -226,5 +228,86 @@ export const clearStats = async (req, res) => {
   } catch (error) {
     console.error('Error clearing stats:', error);
     res.status(500).json({ message: 'Failed to clear statistics' });
+  }
+};
+
+export const adminLogin =async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+
+
+    // Input validation
+    if (!username || !password) {
+      return res.status(400).json({ 
+        message: 'Username and password are required' 
+      });
+    }
+
+    // Find admin user
+    const admin = await Admin.findOne({ username, isActive: true });
+    
+    if (!admin) {
+
+      return res.status(401).json({ 
+        message: 'Invalid credentials' 
+      });
+    }
+
+    // Check password
+    const isPasswordValid = await admin.comparePassword(password);
+    
+    if (!isPasswordValid) {
+
+      return res.status(401).json({ 
+        message: 'Invalid credentials' 
+      });
+    }
+
+    // Update last login
+    admin.lastLogin = new Date();
+    await admin.save();
+
+    // Ensure JWT secret is available
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('JWT_SECRET is not defined in environment variables');
+      return res.status(500).json({ 
+        message: 'Server configuration error' 
+      });
+    }
+
+    // Create token with consistent algorithm
+    const token = jwt.sign(
+      { 
+        id: admin._id.toString(), 
+        username: admin.username, 
+        role: admin.role 
+      },
+      jwtSecret,
+      { 
+        expiresIn: '8h',
+        algorithm: 'HS256' 
+      }
+    );
+
+
+
+    res.json({
+      token,
+      admin: {
+        id: admin._id,
+        username: admin.username,
+        role: admin.role,
+        lastLogin: admin.lastLogin
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ 
+      message: 'Server error during login',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
