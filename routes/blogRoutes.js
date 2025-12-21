@@ -7,7 +7,8 @@ import {
   likeBlog,
   addComment,
   getBlogCategories,
-  searchBlogs
+  searchBlogs,
+  checkExisting
 } from '../controllers/blogController.js';
 
 const router = express.Router();
@@ -23,5 +24,6 @@ router.post('/:blogId/like', likeBlog);
 router.post('/:blogId/comment', addComment);
 router.get('/categories/all', getBlogCategories);
 router.get('/search', searchBlogs);
+router.get('/check-existing', checkExisting); 
 
 export default router;

@@ -422,6 +422,59 @@ export const searchBlogs = async (req, res) => {
   }
 };
 
+export const checkExisting = async (req, res) => {
+  const { title, bookTitle } = req.query;
+  
+  console.log('🎯 CHECK EXISTING ROUTE HIT');
+  console.log('Full URL:', req.originalUrl);
+  console.log('Query params:', req.query);
+  console.log('Request method:', req.method);
+  
+  try {
+    // Search for existing blogs with similar title or book title
+    const existingBlog = await Blog.findOne({
+      $or: [
+        { title: { $regex: new RegExp(title, 'i') } },
+        { 'bookDetails.title': { $regex: new RegExp(bookTitle, 'i') } }
+      ]
+    });
+    
+    console.log('Existing blog found:', existingBlog ? 'Yes' : 'No');
+    
+    if (existingBlog) {
+      console.log('Existing blog details:', {
+        id: existingBlog._id,
+        title: existingBlog.title,
+        slug: existingBlog.slug
+      });
+      
+      return res.json({
+        exists: true,
+        existingBlog: {
+          id: existingBlog._id,
+          title: existingBlog.title,
+          slug: existingBlog.slug,
+          createdAt: existingBlog.createdAt
+        }
+      });
+    }
+    
+    console.log('No existing blog found, returning exists: false');
+    return res.json({ 
+      exists: false,
+      message: 'No existing blog found'
+    });
+    
+  } catch (error) {
+    console.error('Error checking existing blog:', error);
+    console.error('Error stack:', error.stack);
+    return res.status(200).json({ 
+      exists: false,
+      error: 'Failed to check for existing blog',
+      message: error.message 
+    });
+  }
+};
 
 export const saveAutoBlog = async (req, res) => {
   console.log('saveAutoBlog called with body:', req.body);
