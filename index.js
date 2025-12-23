@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import mongoose from "mongoose";
+import cookieParser from 'cookie-parser';
 
 // استيراد الـ routes
 import summaryRoutes from "./routes/summaryRoutes.js";
@@ -10,7 +11,6 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import discoverRoutes from "./routes/discoverRoutes.js";
 import userRoutes from "./routes/userRoutes.js"; 
 import adminRoutes from "./routes/adminRoutes.js"; 
-import Blog from './models/Blog.js';
 import blogRoutes from "./routes/blogRoutes.js"; 
 
 
@@ -38,11 +38,12 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization',"Cookie",'Set-Cookie']
 }));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
 
 // Routes الأساسية
 app.use("/api/blog", blogRoutes);
@@ -63,13 +64,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.get("/api/auto-save/status", (req, res) => {
-  res.json({
-    enabled: blogAutoSaver.isEnabled,
-    minSummaryLength: blogAutoSaver.minSummaryLength,
-    maxDailyAutoBlogs: blogAutoSaver.maxDailyAutoBlogs
-  });
-});
+
 
 app.get("/", (req, res) => {
   res.send("Book AI Backend is running 🚀");
@@ -77,14 +72,7 @@ app.get("/", (req, res) => {
 
 
 
-// Helper function
-function generateSlug(title) {
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '') + '-' + Date.now().toString(36);
-}
+
 
 // معالجة الأخطاء
 app.use((err, req, res, next) => {

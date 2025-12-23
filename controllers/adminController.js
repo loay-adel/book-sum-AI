@@ -1,8 +1,17 @@
-// controllers/adminController.js
 import AdminStats from '../models/AdminStats.js';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import Admin from '../models/Admin.js';
+import crypto from 'crypto';
+
+const generateSecureToken = (adminId) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  
+  // In production, store token in database with expiry
+  return { token, expires };
+};
+
 
 export const getAdminStats = async (req, res) => {
   try {
@@ -231,11 +240,9 @@ export const clearStats = async (req, res) => {
   }
 };
 
-export const adminLogin =async (req, res) => {
+export const adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
-
-
 
     // Input validation
     if (!username || !password) {
@@ -244,13 +251,29 @@ export const adminLogin =async (req, res) => {
       });
     }
 
+    // Sanitize input
+    const sanitizedUsername = username.toLowerCase().trim();
+    
     // Find admin user
-    const admin = await Admin.findOne({ username, isActive: true });
+    const admin = await Admin.findOne({ 
+      username: sanitizedUsername,
+      isActive: true 
+    });
     
     if (!admin) {
-
+      // Don't reveal that user doesn't exist
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Delay response
       return res.status(401).json({ 
         message: 'Invalid credentials' 
+      });
+    }
+
+    // Check if account is locked
+    if (admin.isLocked()) {
+      const timeLeft = Math.ceil((admin.lockUntil - Date.now()) / 1000);
+      return res.status(423).json({
+        message: `Account is locked. Try again in ${timeLeft} seconds.`,
+        retryAfter: 0
       });
     }
 
@@ -258,11 +281,28 @@ export const adminLogin =async (req, res) => {
     const isPasswordValid = await admin.comparePassword(password);
     
     if (!isPasswordValid) {
-
+      // Increment failed attempts
+      await admin.incLoginAttempts();
+      
+      // Check if account should be locked
+      const updatedAdmin = await Admin.findById(admin._id);
+      if (updatedAdmin.isLocked()) {
+        return res.status(423).json({
+          message: 'Account has been locked due to too many failed attempts. Try again in 15 minutes.',
+          retryAfter: 900 // 15 minutes in seconds
+        });
+      }
+      
+      // Delay response to prevent timing attacks
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       return res.status(401).json({ 
         message: 'Invalid credentials' 
       });
     }
+
+    // Reset login attempts on successful login
+    await admin.resetLoginAttempts();
 
     // Update last login
     admin.lastLogin = new Date();
@@ -277,37 +317,155 @@ export const adminLogin =async (req, res) => {
       });
     }
 
-    // Create token with consistent algorithm
+    // Create secure token with limited payload
     const token = jwt.sign(
       { 
-        id: admin._id.toString(), 
-        username: admin.username, 
-        role: admin.role 
+        id: admin._id.toString(),
+        role: admin.role,
+        iss: 'bookwise-admin',
+        aud: 'bookwise-web'
       },
       jwtSecret,
       { 
         expiresIn: '8h',
-        algorithm: 'HS256' 
+        algorithm: 'HS256',
+        jwtid: crypto.randomBytes(16).toString('hex') // Unique JWT ID
       }
     );
 
+    // Create secure HTTP-only cookie for production
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+      path: '/'
+    };
 
+    // Set secure cookie
+    res.cookie('admin_token', token, cookieOptions);
 
+    // Return minimal response
     res.json({
-      token,
+      success: true,
       admin: {
         id: admin._id,
         username: admin.username,
         role: admin.role,
         lastLogin: admin.lastLogin
       }
+      // Don't send token in response body when using cookies
     });
 
   } catch (error) {
     console.error('Admin login error:', error);
+    
+    // Don't leak sensitive error information
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? error.message 
+      : 'Authentication failed';
+    
     res.status(500).json({ 
-      message: 'Server error during login',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: errorMessage
     });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    // Clear cookie
+    res.clearCookie('admin_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/'
+    });
+
+    // If using Authorization header, recommend client to remove token
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Logout failed' });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const admin = await Admin.findById(req.admin.id);
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    // Verify current password
+    const isValid = await admin.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update password
+    admin.password = newPassword;
+    await admin.save();
+
+    // Invalidate all existing sessions (optional)
+    // You could implement a token blacklist here
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Failed to change password' });
+  }
+};
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.admin.id)
+      .select('-password -twoFactorSecret -loginAttempts -lockUntil');
+    
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    res.json(admin);
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ message: 'Failed to fetch profile' });
+  }
+};
+
+export const updateAdminProfile = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    const admin = await Admin.findById(req.admin.id);
+
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin not found' });
+    }
+
+    // Update fields
+    if (username) admin.username = username;
+    if (email) admin.email = email;
+    
+    admin.updatedAt = new Date();
+    await admin.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      admin: {
+        id: admin._id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Failed to update profile' });
   }
 };
