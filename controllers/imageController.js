@@ -10,6 +10,28 @@ const THUMBNAIL_WIDTH = 200;
 const MEDIUM_WIDTH = 400;
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
+const getPublicUrl = (filename) => {
+  // In Docker, we need to use the Nginx path
+  if (process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true') {
+    return `https://api.booksummarizer.net/uploads/${filename}`;
+  }
+  return `/uploads/images/${filename}`;
+};
+
+const getThumbnailUrl = (filename) => {
+  if (process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true') {
+    return `https://api.booksummarizer.net/uploads/thumbnails/${filename}`;
+  }
+  return `/uploads/images/thumbnails/${filename}`;
+};
+
+const getMediumUrl = (filename) => {
+  if (process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true') {
+    return `https://api.booksummarizer.net/uploads/medium/${filename}`;
+  }
+  return `/uploads/images/medium/${filename}`;
+};
+
 // Ensure upload directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -219,7 +241,13 @@ export const getBookCover = async (bookTitle, author = '', forceDownload = false
     };
     
     imageCache.set(cacheKey, placeholder);
-    return placeholder;
+      return {
+    original: getPublicUrl(filename),
+    thumbnail: getThumbnailUrl(filename),
+    medium: getMediumUrl(filename),
+    filename: filename,
+    isPlaceholder: imageInfo.isPlaceholder || false
+  }
     
   } catch (error) {
     console.error('Error getting book cover:', error.message);
