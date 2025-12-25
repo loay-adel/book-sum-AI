@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import mongoose from "mongoose";
 import cookieParser from 'cookie-parser';
+import path from "path";
 
 // استيراد الـ routes
 import summaryRoutes from "./routes/summaryRoutes.js";
@@ -12,10 +13,12 @@ import discoverRoutes from "./routes/discoverRoutes.js";
 import userRoutes from "./routes/userRoutes.js"; 
 import adminRoutes from "./routes/adminRoutes.js"; 
 import blogRoutes from "./routes/blogRoutes.js"; 
-
+import imageRoutes from "./routes/imageRoutes.js";
 
 dotenv.config();
 const app = express();
+
+app.use('/uploads', express.static('uploads'));
 
 // اتصال قاعدة البيانات
 const connectDB = async () => {
@@ -53,7 +56,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/discover", discoverRoutes);
 app.use("/api/user", userRoutes); 
 app.use("/api/admin", adminRoutes); 
-
+app.use("/api/images", imageRoutes); 
 
 // Route للصحة
 app.get("/health", (req, res) => {

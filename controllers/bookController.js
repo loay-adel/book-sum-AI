@@ -1,7 +1,8 @@
-import "dotenv/config"; // تحميل متغيرات البيئة
+import "dotenv/config";
 import axios from "axios";
+import { getBookCover } from "./imageController.js";
 
-// Get book details from Open Library API (no rate limiting issues)
+
 export const getBookDetails = async (bookTitle) => {
   try {
     const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(
@@ -12,35 +13,31 @@ export const getBookDetails = async (bookTitle) => {
     if (response.data.docs && response.data.docs.length > 0) {
       const bookInfo = response.data.docs[0];
 
-      // Get cover image if available
-      let thumbnail = "https://via.placeholder.com/128x192.png?text=No+Image";
-      if (bookInfo.cover_i) {
-        thumbnail = `https://covers.openlibrary.org/b/id/${bookInfo.cover_i}-M.jpg`;
-      }
 
+      const imageInfo = await getBookCover(bookTitle, bookInfo.author_name?.[0]);
+      
       return {
         title: bookInfo.title || "No Title",
         authors: bookInfo.author_name
           ? bookInfo.author_name.join(", ")
           : "Unknown",
-        thumbnail: thumbnail,
+        thumbnail: imageInfo.medium, 
+        coverImage: imageInfo.original, 
         pageCount: bookInfo.number_of_pages_median || null,
         publishedYear: bookInfo.first_publish_year || null,
         isbn: bookInfo.isbn ? bookInfo.isbn[0] : null,
+        localImage: !imageInfo.isPlaceholder,
+        imagePath: imageInfo.filename
       };
     }
-    return null;
+    return getFallbackBookDetails(bookTitle);
   } catch (error) {
-    console.error(
-      "Error fetching book details from Open Library:",
-      error.message
-    );
+    console.error("Error fetching book details:", error.message);
     return getFallbackBookDetails(bookTitle);
   }
 };
 
-// Fallback book details in case API fails
-const getFallbackBookDetails = (bookTitle) => {
+const getFallbackBookDetails = async (bookTitle) => {
   const fallbackBooks = {
     "the great gatsby": {
       title: "The Great Gatsby",
@@ -80,85 +77,32 @@ const getFallbackBookDetails = (bookTitle) => {
   };
 
   const normalizedTitle = bookTitle.toLowerCase();
-  return (
-    fallbackBooks[normalizedTitle] || {
-      title: bookTitle,
-      authors: "Unknown Author",
-      thumbnail: "https://via.placeholder.com/128x192.png?text=No+Image",
-      pageCount: null,
-      publishedYear: null,
-    }
-  );
-};
+  const bookData = fallbackBooks[normalizedTitle] || {
+    title: bookTitle,
+    authors: "Unknown Author",
+    pageCount: null,
+    publishedYear: null,
+  };
 
-// Generate Amazon affiliate link with better search parameters
-export const generateAmazonLink = (bookTitle, author = "") => {
-  const searchQuery = encodeURIComponent(`${bookTitle} ${author}`.trim());
-  const amazonTag = process.env.AMAZON_TAG || "your-tag-20"; // fallback tag
-
-  return `https://www.amazon.com/s?k=${searchQuery}&tag=${amazonTag}`;
-};
-
-// Alternative: Generate multiple bookstore links
-export const generateBookstoreLinks = (bookTitle, author = "") => {
-  const searchQuery = encodeURIComponent(`${bookTitle} ${author}`.trim());
-  const amazonTag = process.env.AMAZON_TAG || "your-tag-20";
-
+  // Get or download cover image
+  const imageInfo = await getBookCover(bookData.title, bookData.authors);
+  
   return {
-    amazon: `https://www.amazon.com/s?k=${searchQuery}&tag=${amazonTag}`,
-    barnesAndNoble: `https://www.barnesandnoble.com/s/${searchQuery}`,
-    bookDepository: `https://www.bookdepository.com/search?searchTerm=${searchQuery}`,
-    abebooks: `https://www.abebooks.com/servlet/SearchResults?kn=${searchQuery}`,
+    ...bookData,
+    thumbnail: imageInfo.medium,
+    coverImage: imageInfo.original,
+    localImage: !imageInfo.isPlaceholder,
+    imagePath: imageInfo.filename
   };
 };
 
-// Get book details with multiple fallback options
+// Enhanced book details with local image caching
 export const getEnhancedBookDetails = async (bookTitle) => {
   try {
-    // Try Open Library first
-    let bookDetails = await getBookDetails(bookTitle);
+    // Get book details (this will now use local images)
+    const bookDetails = await getBookDetails(bookTitle);
 
-    if (!bookDetails || bookDetails.title === "No Title") {
-      // If Open Library fails, try Google Books as fallback
-      try {
-        if (process.env.GOOGLE_BOOKS_API_KEY) {
-          const googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-            bookTitle
-          )}&key=${process.env.GOOGLE_BOOKS_API_KEY}`;
-          const googleResponse = await axios.get(googleUrl, { timeout: 10000 });
-
-          if (
-            googleResponse.data.items &&
-            googleResponse.data.items.length > 0
-          ) {
-            const googleBookInfo = googleResponse.data.items[0].volumeInfo;
-            bookDetails = {
-              title: googleBookInfo.title || bookTitle,
-              authors: googleBookInfo.authors
-                ? googleBookInfo.authors.join(", ")
-                : "Unknown",
-              thumbnail: googleBookInfo.imageLinks
-                ? googleBookInfo.imageLinks.thumbnail
-                : "https://via.placeholder.com/128x192.png",
-              pageCount: googleBookInfo.pageCount,
-              publishedYear: googleBookInfo.publishedDate
-                ? new Date(googleBookInfo.publishedDate).getFullYear()
-                : null,
-            };
-          }
-        }
-      } catch (googleError) {
-        console.error("Google Books API also failed:", googleError.message);
-        // Continue with Open Library result or fallback
-      }
-    }
-
-    // If both APIs fail, use our fallback
-    if (!bookDetails) {
-      bookDetails = getFallbackBookDetails(bookTitle);
-    }
-
-    // Generate multiple purchase links
+    // Generate purchase links
     const purchaseLinks = generateBookstoreLinks(
       bookDetails.title,
       bookDetails.authors
@@ -168,12 +112,31 @@ export const getEnhancedBookDetails = async (bookTitle) => {
       ...bookDetails,
       purchaseLinks,
       primaryPurchaseLink: purchaseLinks.amazon,
+      imageInfo: {
+        isLocal: bookDetails.localImage,
+        path: bookDetails.imagePath,
+        sizes: {
+          thumbnail: bookDetails.thumbnail,
+          medium: bookDetails.coverImage
+        }
+      }
     };
   } catch (error) {
     console.error("Error in enhanced book details:", error.message);
-    const fallbackDetails = getFallbackBookDetails(bookTitle);
+    
+    // Get placeholder image
+    const placeholder = {
+      original: '/uploads/images/placeholder.jpg',
+      thumbnail: '/uploads/images/thumbnails/placeholder.jpg',
+      medium: '/uploads/images/medium/placeholder.jpg'
+    };
+    
+    const fallbackDetails = await getFallbackBookDetails(bookTitle);
     return {
       ...fallbackDetails,
+      thumbnail: placeholder.medium,
+      coverImage: placeholder.original,
+      localImage: false,
       purchaseLinks: generateBookstoreLinks(
         fallbackDetails.title,
         fallbackDetails.authors
