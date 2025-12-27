@@ -10,6 +10,8 @@ const MAX_ATTEMPTS = 50;
 export const authenticateAdmin = async (req, res, next) => {
   try {
     let token;
+        console.log('Auth middleware - Cookies:', req.cookies);
+    console.log('Auth middleware - Headers:', req.headers.authorization);
 
     // Check for token in Authorization header
     const authHeader = req.headers.authorization;

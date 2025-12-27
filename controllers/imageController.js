@@ -11,7 +11,7 @@ const MEDIUM_WIDTH = 400;
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 
 const getPublicUrl = (filename) => {
-  // In Docker, we need to use the Nginx path
+
   if (process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV === 'true') {
     return `https://api.booksummarizer.net/uploads/${filename}`;
   }
