@@ -337,10 +337,10 @@ export const adminLogin = async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 8 * 60 * 60 * 1000,
       path: '/',
-      domain: isProduction ? '.booksummarizer.net' : undefined
+      domain: isProduction ? 'booksummarizer.net' : undefined
     };
 
     console.log('Setting cookie with options:', cookieOptions);
