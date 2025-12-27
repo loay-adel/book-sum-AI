@@ -2,7 +2,6 @@ import "dotenv/config";
 import axios from "axios";
 import { getBookCover } from "./imageController.js";
 
-
 export const getBookDetails = async (bookTitle) => {
   try {
     const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(
@@ -12,7 +11,6 @@ export const getBookDetails = async (bookTitle) => {
 
     if (response.data.docs && response.data.docs.length > 0) {
       const bookInfo = response.data.docs[0];
-
 
       const imageInfo = await getBookCover(bookTitle, bookInfo.author_name?.[0]);
       
@@ -93,6 +91,26 @@ const getFallbackBookDetails = async (bookTitle) => {
     coverImage: imageInfo.original,
     localImage: !imageInfo.isPlaceholder,
     imagePath: imageInfo.filename
+  };
+};
+
+// Generate Amazon affiliate link with better search parameters
+export const generateAmazonLink = (bookTitle, author = "") => {
+  const searchQuery = encodeURIComponent(`${bookTitle} ${author}`.trim());
+  const amazonTag = process.env.AMAZON_TAG || "your-tag-20"; // fallback tag
+  return `https://www.amazon.com/s?k=${searchQuery}&tag=${amazonTag}`;
+};
+
+// Generate multiple bookstore links
+export const generateBookstoreLinks = (bookTitle, author = "") => {
+  const searchQuery = encodeURIComponent(`${bookTitle} ${author}`.trim());
+  const amazonTag = process.env.AMAZON_TAG || "your-tag-20";
+
+  return {
+    amazon: `https://www.amazon.com/s?k=${searchQuery}&tag=${amazonTag}`,
+    barnesAndNoble: `https://www.barnesandnoble.com/s/${searchQuery}`,
+    bookDepository: `https://www.bookdepository.com/search?searchTerm=${searchQuery}`,
+    abebooks: `https://www.abebooks.com/servlet/SearchResults?kn=${searchQuery}`,
   };
 };
 

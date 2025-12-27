@@ -87,13 +87,13 @@ export const downloadAndSaveImage = async (imageUrl, bookTitle) => {
         // Generate thumbnail and medium versions
         generateImageVariants(imagePath)
           .then(variants => {
-            resolve({
-              original: `/uploads/images/${filename}`,
-              thumbnail: `/uploads/images/thumbnails/${filename}`,
-              medium: `/uploads/images/medium/${filename}`,
-              filename: filename,
-              path: imagePath
-            });
+        resolve({
+          original: getPublicUrl(filename),
+          thumbnail: getThumbnailUrl(filename),
+          medium: getMediumUrl(filename),
+          filename: filename,
+          path: imagePath
+        });
           })
           .catch(err => reject(err));
       });
@@ -252,11 +252,10 @@ export const getBookCover = async (bookTitle, author = '', forceDownload = false
   } catch (error) {
     console.error('Error getting book cover:', error.message);
     
-    // Return placeholder on error
     const placeholder = {
-      original: '/uploads/images/placeholder.jpg',
-      thumbnail: '/uploads/images/thumbnails/placeholder.jpg',
-      medium: '/uploads/images/medium/placeholder.jpg',
+      original: getPublicUrl('placeholder.jpg'),
+      thumbnail: getThumbnailUrl('placeholder.jpg'),
+      medium: getMediumUrl('placeholder.jpg'),
       filename: 'placeholder.jpg',
       isPlaceholder: true
     };
