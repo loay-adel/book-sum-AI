@@ -333,20 +333,21 @@ export const adminLogin = async (req, res) => {
       }
     );
 
-    // Create secure HTTP-only cookie for production
-    const isProduction = process.env.NODE_ENV === 'production';
+ const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'strict' : 'lax',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-      path: '/'
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/',
+      domain: isProduction ? '.booksummarizer.net' : undefined
     };
 
-    // Set secure cookie
+    console.log('Setting cookie with options:', cookieOptions);
+    console.log('Token to set:', token.substring(0, 20) + '...');
+
     res.cookie('admin_token', token, cookieOptions);
 
-    // Return minimal response
     res.json({
       success: true,
       admin: {
@@ -354,8 +355,9 @@ export const adminLogin = async (req, res) => {
         username: admin.username,
         role: admin.role,
         lastLogin: admin.lastLogin
-      }
-      // Don't send token in response body when using cookies
+      },
+      // For debugging, also return token in response (remove in production)
+      token: process.env.NODE_ENV === 'development' ? token : undefined
     });
 
   } catch (error) {
